@@ -20,4 +20,5 @@ export const MAP_TYPES: TestCaseBasemap[] = [
   'TencentMap',
   'TMap',
   'GoogleMap',
+  'PetalMap',
 ] as const;

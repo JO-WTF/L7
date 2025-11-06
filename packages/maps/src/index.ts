@@ -5,6 +5,7 @@ import GoogleMap from './gmap';
 import Map from './map/';
 import Mapbox from './mapbox/';
 import MapLibre from './maplibre';
+import PetalMap from './petal';
 import TMap from './tdtmap';
 import TencentMap from './tmap';
 import type { MapType } from './types';
@@ -37,6 +38,7 @@ export {
   Mapbox,
   MapLibre,
   MapType,
+  PetalMap,
   TencentMap,
   TMap,
 };

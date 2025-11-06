@@ -18,7 +18,8 @@ export type TestCaseBasemap =
   | 'TencentMap'
   | 'Mapbox'
   | 'TMap'
-  | 'GoogleMap';
+  | 'GoogleMap'
+  | 'PetalMap';
 
 export type TestCaseOptions = GUIOptions & {
   id: string | HTMLDivElement;
