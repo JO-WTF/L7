@@ -26,7 +26,7 @@ export const dot: TestCase = async (options) => {
       },
     })
     .shape('dot')
-    .size(0.5)
+    .size(1.5)
     .color('type', (type) => {
       switch (parseInt(type)) {
         case 3:

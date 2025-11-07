@@ -19,9 +19,11 @@ import PetalMapLoader from './maploader';
 
 type CallbackMap = Map<string, Map<(...args: any[]) => any, (...args: any[]) => any>>;
 
-const PETAL_MAP_TOKEN = 'DQEDAD1uMZ0F69eNhmcLlqbB4w6NDtDUi4l2PlXdfoY7xVJaJrlAFg5BrUbHIPglTyNXkdksd1JkhyFzDmm6BoA5gxkGPPquJHquLw==';
+const PETAL_MAP_TOKEN =
+  'DQEDAD1uMZ0F69eNhmcLlqbB4w6NDtDUi4l2PlXdfoY7xVJaJrlAFg5BrUbHIPglTyNXkdksd1JkhyFzDmm6BoA5gxkGPPquJHquLw==';
 const DEFAULT_CENTER: [number, number] = [121.30654632240122, 31.25744185633306];
 const DEFAULT_ZOOM = 5;
+const ZOOM_OFFSET = 1;
 
 const EventMap: Record<string, string | string[]> = {
   mapmove: ['movestart', 'moveend'],
@@ -51,7 +53,7 @@ export default class PetalMapService extends BaseMapService<any> {
   private overlayContainer: HTMLElement | null = null;
 
   public getType(): string {
-    return 'petalmap';
+    return 'PetalMap';
   }
 
   public getMapStyle(): MapStyleName {
@@ -105,7 +107,7 @@ export default class PetalMapService extends BaseMapService<any> {
       if (!resolvedAccessToken) {
         throw new Error(
           'Petal Maps access token is required. Please provide `token` in map config. ' +
-          'You can get an access token from Huawei Developer Console: https://developer.huawei.com/consumer/cn/service/josp/agc/index.html'
+            'You can get an access token from Huawei Developer Console: https://developer.huawei.com/consumer/cn/service/josp/agc/index.html',
         );
       }
 
@@ -113,17 +115,21 @@ export default class PetalMapService extends BaseMapService<any> {
       if (resolvedAccessToken === PETAL_MAP_TOKEN) {
         console.warn(
           '%cPetal Maps: Using default demo token. For production use, please:\n' +
-          '1. Get your own token from: https://developer.huawei.com/consumer/cn/service/josp/agc/index.html\n' +
-          '2. Provide your token in map config: { token: "your_token_here" }',
-          'color: #ff6b35; font-weight: bold; font-size: 12px;'
+            '1. Get your own token from: https://developer.huawei.com/consumer/cn/service/josp/agc/index.html\n' +
+            '2. Provide your token in map config: { token: "your_token_here" }',
+          'color: #ff6b35; font-weight: bold; font-size: 12px;',
         );
       }
 
+      const resolvedZoom = typeof zoom === 'number' ? zoom + ZOOM_OFFSET : zoom;
+      const resolvedMinZoom = typeof minZoom === 'number' ? minZoom + ZOOM_OFFSET : minZoom;
+      const resolvedMaxZoom = typeof maxZoom === 'number' ? maxZoom + ZOOM_OFFSET : maxZoom;
+
       const mapOptions: Record<string, any> = {
         ...rest,
-        zoom,
-        minZoom,
-        maxZoom,
+        zoom: resolvedZoom,
+        minZoom: resolvedMinZoom,
+        maxZoom: resolvedMaxZoom,
         center: this.createLatLng(center),
         authOptions: {
           accessToken: resolvedAccessToken,
@@ -147,7 +153,7 @@ export default class PetalMapService extends BaseMapService<any> {
     // 等待地图加载完成后再启用交互
     this.waitForMapReady().then(() => {
       this.enableMapInteractions();
-      // Ensure viewport sync at start
+      // 确保初始 viewport 同步
       this.handleCameraChanged();
     });
   }
@@ -239,8 +245,7 @@ export default class PetalMapService extends BaseMapService<any> {
       // 检查地图是否已经加载完成
       const checkReady = () => {
         // 如果地图有 getZoom 方法且能正常返回值，说明已经加载完成
-        if (typeof this.map?.getZoom === 'function' &&
-          typeof this.map?.getCenter === 'function') {
+        if (typeof this.map?.getZoom === 'function' && typeof this.map?.getCenter === 'function') {
           try {
             const zoom = this.map.getZoom();
             const center = this.map.getCenter();
@@ -313,17 +318,22 @@ export default class PetalMapService extends BaseMapService<any> {
     }
 
     const container = this.getContainer();
-    return [
-      container?.clientWidth ?? 0,
-      container?.clientHeight ?? 0,
-    ];
+    return [container?.clientWidth ?? 0, container?.clientHeight ?? 0];
   }
 
   public getZoom(): number {
-    return Number(this.map?.getZoom?.()) || 0;
+    const rawZoom = this.map?.getZoom?.();
+    if (typeof rawZoom === 'number' && !Number.isNaN(rawZoom)) {
+      return rawZoom - ZOOM_OFFSET;
+    }
+    return 0;
   }
 
   public setZoom(zoom: number): void {
+    if (typeof zoom === 'number' && !Number.isNaN(zoom)) {
+      this.map?.setZoom?.(zoom + ZOOM_OFFSET);
+      return;
+    }
     this.map?.setZoom?.(zoom);
   }
 
@@ -401,11 +411,19 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public getMinZoom(): number {
-    return Number(this.map?.getMinZoom?.()) || 0;
+    const rawMinZoom = this.map?.getMinZoom?.();
+    if (typeof rawMinZoom === 'number' && !Number.isNaN(rawMinZoom)) {
+      return rawMinZoom - ZOOM_OFFSET;
+    }
+    return 0;
   }
 
   public getMaxZoom(): number {
-    return Number(this.map?.getMaxZoom?.()) || 20;
+    const rawMaxZoom = this.map?.getMaxZoom?.();
+    if (typeof rawMaxZoom === 'number' && !Number.isNaN(rawMaxZoom)) {
+      return rawMaxZoom - ZOOM_OFFSET;
+    }
+    return 20;
   }
 
   public zoomIn(option?: any, eventData?: any): void {
@@ -443,10 +461,18 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public setMaxZoom(max: number): void {
+    if (typeof max === 'number' && !Number.isNaN(max)) {
+      this.map?.setMaxZoom?.(max + ZOOM_OFFSET);
+      return;
+    }
     this.map?.setMaxZoom?.(max);
   }
 
   public setMinZoom(min: number): void {
+    if (typeof min === 'number' && !Number.isNaN(min)) {
+      this.map?.setMinZoom?.(min + ZOOM_OFFSET);
+      return;
+    }
     this.map?.setMinZoom?.(min);
   }
 
@@ -501,7 +527,11 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public setZoomAndCenter(zoom: number, center: [number, number]): void {
-    this.map?.setZoom?.(zoom);
+    if (typeof zoom === 'number' && !Number.isNaN(zoom)) {
+      this.map?.setZoom?.(zoom + ZOOM_OFFSET);
+    } else {
+      this.map?.setZoom?.(zoom);
+    }
     this.setCenter(center);
   }
 
@@ -528,7 +558,7 @@ export default class PetalMapService extends BaseMapService<any> {
     });
     const coordDistance = Math.sqrt(
       Math.pow(centerMercator.x - outerMercator.x, 2) +
-      Math.pow(centerMercator.y - outerMercator.y, 2),
+        Math.pow(centerMercator.y - outerMercator.y, 2),
     );
     const earthRadius = 6378137;
     const radLat1 = (center[1] * Math.PI) / 180;
@@ -540,7 +570,7 @@ export default class PetalMapService extends BaseMapService<any> {
       Math.asin(
         Math.sqrt(
           Math.pow(Math.sin(a / 2), 2) +
-          Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b / 2), 2),
+            Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b / 2), 2),
         ),
       );
     const meterDistance = s * earthRadius;
@@ -689,15 +719,7 @@ export default class PetalMapService extends BaseMapService<any> {
   };
 
   private static syncViewport(service?: PetalMapService) {
-    if (!service || !service.viewport) {
-      return;
-    }
-
-    if (!service.map) {
-      return;
-    }
-
-    if (typeof service.getSize !== 'function') {
+    if (!service || !service.viewport || !service.map) {
       return;
     }
 
@@ -705,17 +727,13 @@ export default class PetalMapService extends BaseMapService<any> {
     try {
       size = service.getSize();
     } catch (error) {
-      console.warn('PetalMapService: unable to read size from map instance', error);
       return;
     }
     if (!Array.isArray(size) || size.length < 2) {
       return;
     }
     const [width, height] = size;
-    if (typeof width !== 'number' || typeof height !== 'number') {
-      return;
-    }
-    if (width <= 0 || height <= 0) {
+    if (typeof width !== 'number' || typeof height !== 'number' || width <= 0 || height <= 0) {
       return;
     }
 
@@ -724,9 +742,7 @@ export default class PetalMapService extends BaseMapService<any> {
     const [lng, lat] = service.normalizeLngLat(service.map?.getCenter?.());
     const bearing = typeof service.getRotation === 'function' ? service.getRotation() : 0;
     const pitch = typeof service.getPitch === 'function' ? service.getPitch() : 0;
-    const rawZoom = typeof service.getZoom === 'function' ? service.getZoom() : undefined;
-    // Petal Maps 的缩放级别不需要调整，直接使用原始值
-    const zoom = typeof rawZoom === 'number' ? rawZoom : 0;
+    const zoom = typeof service.getZoom === 'function' ? service.getZoom() : 0;
 
     service.viewport.syncWithMapCamera({
       center: [lng, lat],
@@ -780,23 +796,34 @@ export default class PetalMapService extends BaseMapService<any> {
     this.registerCameraEvent('movestart');
     this.registerCameraEvent('moveend');
 
-    const service = this;
-
     // 使用 Petal Maps 特有的回调方法
     if (typeof this.map?.onZoomChanged === 'function') {
-      const handler = () => PetalMapService.syncViewport(service);
+      const handler = () => {
+        // 立即同步 viewport，确保缩放事件及时响应
+        requestAnimationFrame(() => {
+          PetalMapService.syncViewport(this);
+        });
+      };
       this.map.onZoomChanged(handler);
       this.cameraEventHandlers.set('onZoomChanged', handler);
     }
 
     if (typeof this.map?.onCenterChanged === 'function') {
-      const handler = () => PetalMapService.syncViewport(service);
+      const handler = () => {
+        requestAnimationFrame(() => {
+          PetalMapService.syncViewport(this);
+        });
+      };
       this.map.onCenterChanged(handler);
       this.cameraEventHandlers.set('onCenterChanged', handler);
     }
 
     if (typeof this.map?.onHeadingChanged === 'function') {
-      const handler = () => PetalMapService.syncViewport(service);
+      const handler = () => {
+        requestAnimationFrame(() => {
+          PetalMapService.syncViewport(this);
+        });
+      };
       this.map.onHeadingChanged(handler);
       this.cameraEventHandlers.set('onHeadingChanged', handler);
     }
@@ -806,8 +833,12 @@ export default class PetalMapService extends BaseMapService<any> {
     if (typeof this.map?.on !== 'function') {
       return;
     }
-    const service = this;
-    const handler = () => PetalMapService.syncViewport(service);
+    const handler = () => {
+      // 使用 requestAnimationFrame 确保同步操作在下一帧执行
+      requestAnimationFrame(() => {
+        PetalMapService.syncViewport(this);
+      });
+    };
     this.map.on(eventName, handler);
     this.cameraEventHandlers.set(eventName, handler);
   }

@@ -5,7 +5,7 @@ export const simpleMap: TestCase = async (options) => {
   const scene = await CaseScene({
     ...options,
     mapConfig: {
-      center: [500, 500],
+      center: [120, 40],
       zoom: 3,
       version: 'SIMPLE',
       mapSize: 1000,

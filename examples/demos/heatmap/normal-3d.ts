@@ -8,7 +8,7 @@ export const normal3D: TestCase = async (options) => {
     ...options,
     mapConfig: {
       center: [121.434765, 31.256735],
-      zoom: 14.83,
+      zoom: 4.83,
     },
   });
 
