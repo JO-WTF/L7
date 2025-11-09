@@ -125,24 +125,20 @@ export default class PetalMapService extends BaseMapService<any> {
       const resolvedZoom = typeof zoom === 'number' ? zoom + ZOOM_OFFSET : zoom;
       const resolvedMinZoom = typeof minZoom === 'number' ? minZoom + ZOOM_OFFSET : minZoom;
       const resolvedMaxZoom = typeof maxZoom === 'number' ? maxZoom + ZOOM_OFFSET : maxZoom;
+      const centerLatLng = { lng: center[0], lat: center[1] };
 
       const mapOptions: Record<string, any> = {
         ...rest,
         zoom: resolvedZoom,
         minZoom: resolvedMinZoom,
         maxZoom: resolvedMaxZoom,
-        center: this.createLatLng(center),
+        center: centerLatLng,
         authOptions: {
           accessToken: resolvedAccessToken,
         },
       };
 
       const HWMapCtor = sdk?.HWMap ?? (window as any).HWMapJsSDK?.HWMap;
-      if (typeof HWMapCtor !== 'function') {
-        throw new Error(
-          'HWMapJsSDK.HWMap constructor is not available. Please confirm that the Petal Maps SDK script is reachable and that the access token is valid.',
-        );
-      }
       this.map = new HWMapCtor(mapContainer, mapOptions);
       this.$mapContainer = this.map.getDiv() ?? mapContainer;
     }
@@ -282,12 +278,18 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public getCenter(): ILngLat {
-    const [lng, lat] = this.normalizeLngLat(this.map?.getCenter());
-    return { lng, lat };
+    const center = this.map?.getCenter() as { lng?: number; lat?: number } | undefined;
+    if (center && typeof center.lng === 'number' && typeof center.lat === 'number') {
+      return { lng: center.lng, lat: center.lat };
+    }
+    return { lng: DEFAULT_CENTER[0], lat: DEFAULT_CENTER[1] };
   }
 
   public setCenter(lnglat: [number, number]): void {
-    this.map?.setCenter(this.createLatLng(lnglat));
+    if (!this.map) return;
+    const sdk = (window as any).HWMapJsSDK;
+    const [lng, lat] = lnglat;
+    this.map.setCenter(new sdk.LatLng(lat, lng));
   }
 
   public getPitch(): number {
@@ -303,24 +305,17 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public getBounds(): Bounds {
-    const bounds = this.map?.getBounds();
-    if (bounds?.getSouthWest && bounds?.getNorthEast) {
-      const sw = this.normalizeLngLat(bounds.getSouthWest());
-      const ne = this.normalizeLngLat(bounds.getNorthEast());
+    const bounds = this.map?.getBounds() as {
+      sw: { lng: number; lat: number };
+      ne: { lng: number; lat: number };
+    } | null;
+    if (bounds?.sw && bounds?.ne) {
       return [
-        [sw[0], sw[1]],
-        [ne[0], ne[1]],
+        [bounds.sw.lng, bounds.sw.lat],
+        [bounds.ne.lng, bounds.ne.lat],
       ];
     }
-    if (Array.isArray(bounds)) {
-      const sw = this.normalizeLngLat(bounds[0]);
-      const ne = this.normalizeLngLat(bounds[1]);
-      return [
-        [sw[0], sw[1]],
-        [ne[0], ne[1]],
-      ];
-    }
-    const [lng, lat] = this.normalizeLngLat(this.map?.getCenter());
+    const { lng, lat } = this.getCenter();
     return [
       [lng, lat],
       [lng, lat],
@@ -344,7 +339,11 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public panTo(p: [number, number]): void {
-    this.map?.panTo(this.createLatLng(p));
+    if (!this.map) return;
+    const sdk = (window as any).HWMapJsSDK;
+    if (typeof sdk?.LatLng !== 'function') return;
+    const [lng, lat] = p;
+    this.map.panTo(new sdk.LatLng(lat, lng));
   }
 
   public panBy(x: number = 0, y: number = 0): void {
@@ -352,13 +351,15 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public fitBounds(bound: Bounds, fitBoundsOptions?: any): void {
+    const sdk = (window as any).HWMapJsSDK;
+    if (typeof sdk?.LatLng !== 'function') return;
     const bounds = this.createBounds(bound);
     if (bounds) {
       this.map?.fitBounds(bounds, fitBoundsOptions);
     } else if (this.map?.panToBounds) {
       this.map.panToBounds(this.boundsToArray(bound));
     } else if (this.map?.setFitView) {
-      const points = bound.map((coordinate) => this.createLatLng(coordinate));
+      const points = bound.map(([lng, lat]) => new sdk.LatLng(lat, lng));
       this.map.setFitView(points, fitBoundsOptions);
     }
   }
@@ -416,16 +417,17 @@ export default class PetalMapService extends BaseMapService<any> {
   }
 
   public pixelToLngLat([x, y]: Point): ILngLat {
-    const latLng = this.map?.fromScreenLocation({ x, y });
-    if (latLng) {
-      const [lng, lat] = this.normalizeLngLat(latLng);
-      return { lng, lat };
+    const latLng = this.map?.fromScreenLocation({ x, y }) as { lng?: number; lat?: number };
+    if (latLng && typeof latLng.lng === 'number' && typeof latLng.lat === 'number') {
+      return { lng: latLng.lng, lat: latLng.lat };
     }
     return this.getCenter();
   }
 
   public lngLatToPixel([lng, lat]: Point): IPoint {
-    const point = this.map?.toScreenLocation(this.createLatLng([lng, lat]));
+    const sdk = (window as any).HWMapJsSDK;
+    if (typeof sdk?.LatLng !== 'function') return { x: 0, y: 0 };
+    const point = this.map?.toScreenLocation(new sdk.LatLng(lat, lng));
     return point ? { x: Number(point.x) || 0, y: Number(point.y) || 0 } : { x: 0, y: 0 };
   }
 
@@ -537,7 +539,9 @@ export default class PetalMapService extends BaseMapService<any> {
     if (typeof width !== 'number' || typeof height !== 'number' || width <= 0 || height <= 0)
       return;
     service.emit('mapchange');
-    const [lng, lat] = service.normalizeLngLat(service.map.getCenter());
+    const center = service.map.getCenter() as { lng?: number; lat?: number };
+    const lng = typeof center?.lng === 'number' ? center.lng : DEFAULT_CENTER[0];
+    const lat = typeof center?.lat === 'number' ? center.lat : DEFAULT_CENTER[1];
     service.viewport.syncWithMapCamera({
       center: [lng, lat],
       viewportHeight: height,
@@ -559,14 +563,11 @@ export default class PetalMapService extends BaseMapService<any> {
     }
     if (cbProxyMap.get(handle)) return;
     const handleProxy = (...args: any[]) => {
-      const event = args[0];
-      if (event && typeof event === 'object') {
-        if (!event.lngLat) {
-          const [lng, lat] = this.extractEventLngLat(event);
-          event.lngLat = { lng, lat };
-        }
-        if (!event.lnglat && event.lngLat) event.lnglat = event.lngLat;
+      const event = args[0] as Record<string, any>;
+      if (!event.lngLat && event.x !== undefined && event.y !== undefined) {
+        event.lngLat = { lng: event.x as number, lat: event.y as number };
       }
+      if (!event.lnglat && event.lngLat) event.lnglat = event.lngLat;
       handle(...args);
     };
     cbProxyMap.set(handle, handleProxy);
@@ -595,63 +596,17 @@ export default class PetalMapService extends BaseMapService<any> {
     this.cameraEventHandlers.clear();
   }
 
-  private normalizeLngLat(value: any): [number, number] {
-    if (!value) return [...DEFAULT_CENTER];
-    if (typeof value.lng === 'function' && typeof value.lat === 'function') {
-      return [Number(value.lng()) || 0, Number(value.lat()) || 0];
-    }
-    const lngKey =
-      'lng' in value ? 'lng' : 'longitude' in value ? 'longitude' : 'x' in value ? 'x' : null;
-    const latKey =
-      'lat' in value ? 'lat' : 'latitude' in value ? 'latitude' : 'y' in value ? 'y' : null;
-    if (lngKey && latKey) {
-      return [Number(value[lngKey]) || 0, Number(value[latKey]) || 0];
-    }
-    if (Array.isArray(value) && value.length >= 2) {
-      return [Number(value[0]) || 0, Number(value[1]) || 0];
-    }
-    return [...DEFAULT_CENTER];
-  }
-
-  private createLatLng(lnglat: [number, number] | { lng: number; lat: number }) {
-    const [lng, lat] = Array.isArray(lnglat) ? lnglat : [lnglat.lng, lnglat.lat];
-    const sdk = (window as any).HWMapJsSDK;
-    return sdk?.LatLng
-      ? new sdk.LatLng(lat, lng)
-      : sdk?.HWLatLng
-        ? new sdk.HWLatLng(lat, lng)
-        : sdk?.HWMapUtils?.createLatLng
-          ? sdk.HWMapUtils.createLatLng(lat, lng)
-          : { lng, lat };
-  }
-
   private createBounds(bound: Bounds) {
     const sdk = (window as any).HWMapJsSDK;
-    if (sdk?.LatLngBounds) {
-      const [sw, ne] = bound;
-      return new sdk.LatLngBounds(this.createLatLng(sw), this.createLatLng(ne));
+    if (typeof sdk?.LatLngBounds !== 'function' || typeof sdk?.LatLng !== 'function') {
+      return null;
     }
-    return null;
+    const [sw, ne] = bound;
+    return new sdk.LatLngBounds(new sdk.LatLng(sw[1], sw[0]), new sdk.LatLng(ne[1], ne[0]));
   }
 
   private boundsToArray(bound: Bounds): [number, number, number, number] {
     const [sw, ne] = bound;
     return [sw[0], sw[1], ne[0], ne[1]];
-  }
-
-  private extractEventLngLat(event: any): [number, number] {
-    if (!event) return [...DEFAULT_CENTER];
-    if (event.latLng) return this.normalizeLngLat(event.latLng);
-    if (event.position) return this.normalizeLngLat(event.position);
-    if (event.coordinate && (window as any).HWMapJsSDK?.HWMapUtils?.epsgToLatLng) {
-      return this.normalizeLngLat(
-        (window as any).HWMapJsSDK.HWMapUtils.epsgToLatLng(event.coordinate),
-      );
-    }
-    if (event.pixel) {
-      const result = this.map?.fromScreenLocation(event.pixel);
-      if (result) return this.normalizeLngLat(result);
-    }
-    return this.normalizeLngLat(this.map?.getCenter());
   }
 }
